@@ -1,0 +1,8 @@
+Package has been created to assist maintaining paypal side of commerce site.
+Initial tools have been developed to pull contact information and sales 
+invoices from the paypal dumps. Eventually this will be replaced with 
+locally managed information, and only pushed to paypal, but for simple 
+shopping sites using the basic paypal shopping basket can be linked 
+using the tools provided.
+
+Contact information is pushed to the contact package.
