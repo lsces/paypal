@@ -14,7 +14,7 @@
  */
 require_once( LIBERTY_PKG_PATH.'LibertyContent.php' );		// Paypal base class
 
-define( 'PAYPAL_CONTENT_TYPE_GUID', 'paypal_trans' );
+define( 'PAYPAL_CONTENT_TYPE_GUID', 'paypal' );
 
 /**
  * @package paypal
@@ -66,7 +66,7 @@ class Paypal extends LibertyContent {
 				INNER JOIN `".BIT_DB_PREFIX."liberty_content` lc ON ( lc.`content_id` = ci.`content_id` )
 				LEFT JOIN `".BIT_DB_PREFIX."users_users` uue ON (uue.`user_id` = lc.`modifier_user_id`)
 				LEFT JOIN `".BIT_DB_PREFIX."users_users` uuc ON (uuc.`user_id` = lc.`user_id`)
-				LEFT JOIN `".BIT_DB_PREFIX."paypal_address` a ON a.usn = ci.usn
+				LEFT JOIN `".BIT_DB_PREFIX."contact_address` a ON a.usn = ci.usn
 				LEFT JOIN `".BIT_DB_PREFIX."nlpg_blpu` n ON n.`uprn` = ci.`nlpg`
 				LEFT JOIN `".BIT_DB_PREFIX."nlpg_lpi` p ON p.`uprn` = ci.`nlpg` AND p.`language` = 'ENG' AND p.`logical_status` = 1
 				WHERE ci.`content_id`=?";
@@ -273,28 +273,28 @@ class Paypal extends LibertyContent {
 		array_push( $bindVars, $this->mContentTypeGuid );
 		$this->getServicesSql( 'content_list_sql_function', $selectSql, $joinSql, $whereSql, $bindVars );
 
-		if ( isset($pListHash['find']) ) {
+/*		if ( isset($pListHash['find']) ) {
 			$findesc = '%' . strtoupper( $pListHash['find'] ) . '%';
 			$whereSql .= " AND (UPPER(con.`SURNAME`) like ? or UPPER(con.`FORENAME`) like ?) ";
 			array_push( $bindVars, $findesc );
 		}
-
+*/
 		if ( isset($pListHash['add_sql']) ) {
 			$whereSql .= " AND $add_sql ";
 		}
 
-		$query = "SELECT con.*, lc.*, 
+		$query = "SELECT pp.*, lc.*, 
 				uue.`login` AS modifier_user, uue.`real_name` AS modifier_real_name,
 				uuc.`login` AS creator_user, uuc.`real_name` AS creator_real_name $selectSql
-				FROM `".BIT_DB_PREFIX."paypal` ci 
-				INNER JOIN `".BIT_DB_PREFIX."liberty_content` lc ON ( lc.`content_id` = ci.`content_id` )
+				FROM `".BIT_DB_PREFIX."paypal` pp 
+				INNER JOIN `".BIT_DB_PREFIX."liberty_content` lc ON ( lc.`content_id` = pp.`content_id` )
 				LEFT JOIN `".BIT_DB_PREFIX."users_users` uue ON (uue.`user_id` = lc.`modifier_user_id`)
 				LEFT JOIN `".BIT_DB_PREFIX."users_users` uuc ON (uuc.`user_id` = lc.`user_id`)
 				$joinSql
 				WHERE lc.`content_type_guid`=? $whereSql  
 				order by ".$this->mDb->convertSortmode( $pListHash['sort_mode'] );
-		$query_cant = "SELECT COUNT(lc.`content_id`) FROM `".BIT_DB_PREFIX."paypal` ci
-				INNER JOIN `".BIT_DB_PREFIX."liberty_content` lc ON ( lc.`content_id` = ci.`content_id` )
+		$query_cant = "SELECT COUNT(lc.`content_id`) FROM `".BIT_DB_PREFIX."paypal` pp
+				INNER JOIN `".BIT_DB_PREFIX."liberty_content` lc ON ( lc.`content_id` = pp.`content_id` )
 				$joinSql
 				WHERE lc.`content_type_guid`=? $whereSql";
 
@@ -336,11 +336,14 @@ class Paypal extends LibertyContent {
 	 * Paypal csv log file import 
 	 */
 	function PaypalBaseRecordLoad( $data ) {
-		$table = BIT_DB_PREFIX."paypal";
-		$atable = BIT_DB_PREFIX."paypal_address";
+		$ctable = BIT_DB_PREFIX."contact";
+		$ptable = BIT_DB_PREFIX."paypal";
+		$atable = BIT_DB_PREFIX."contact_address";
 
 		
 		$pDataHash['paypal_store']['txn_date'] = $data[0];
+		$pDataHash['contact_store']['parent_id'] = 4;
+		$pDataHash['contact_store']['xkey'] = $data[3];
 		// Todo - handle timezone offset !!! 
 		$pDataHash['paypal_store']['txn_name'] = $data[3];
 		$pDataHash['paypal_store']['txn_type'] = $data[4];
@@ -368,25 +371,24 @@ class Paypal extends LibertyContent {
 		$pDataHash['paypal_store']['reference_txn_id'] = $data[25];
 		$pDataHash['paypal_store']['cust_no'] = $data[26];
 		$pDataHash['paypal_store']['vat'] = $data[27];
-		$pDataHash['address_store']['txn_name'] = $data[3];
-		$pDataHash['address_store']['cust_no'] = $data[26];
-		$pDataHash['address_store']['number'] = substr($data[30], 1, 10 );
+		$pDataHash['address_store']['organisation'] = $data[3];
+		$pDataHash['address_store']['sao'] = substr($data[30], 0, 10 );
 		$pDataHash['address_store']['street'] = $data[30];
 		$pDataHash['address_store']['locality'] = $data[31];
 		$pDataHash['address_store']['town'] = $data[32];
 		$pDataHash['address_store']['county'] = $data[33];
 		$pDataHash['address_store']['postcode'] = $data[34];
 		$pDataHash['address_store']['country'] = $data[35];
-		$pDataHash['address_store']['phone'] = $data[36];
+		$pDataHash['paypal_store']['phone'] = $data[36];
 
 		$query_cant = "SELECT COUNT(pp.`txn_id`) FROM `".BIT_DB_PREFIX."paypal` pp
 				WHERE pp.`txn_id`=?";
 		$cant = $this->mDb->getOne( $query_cant, Array( $data[12] ) );
 		
 		if ( $cant > 0 ) {
-		  $query_cant = "SELECT * FROM `".BIT_DB_PREFIX."paypal` pp
+		  $query_cant = "SELECT COUNT(pp.`txn_id`) FROM `".BIT_DB_PREFIX."paypal` pp
 				WHERE pp.`txn_id`=?";
-		  $current = $this->mDb->query( $query_cant, Array( 9000000000 + $data[0] ) );
+		  $current = $this->mDb->query( $query_cant, Array( $data[12] ) );
 		  $cfields = $current->fetchRow();
 		  $save = false;
 // TODO - Handle duplicate transaction ID from paypal 
@@ -395,10 +397,13 @@ class Paypal extends LibertyContent {
 			$this->mContentId = 0;
 			$pDataHash['content_id'] = 0;
 			if ( LibertyContent::store( $pDataHash ) ) {
+				$pDataHash['contact_store']['content_id'] = $pDataHash['content_id'];
 				$pDataHash['paypal_store']['content_id'] = $pDataHash['content_id'];
-				$pDataHash['address_store']['paypal_addr_id'] = $pDataHash['content_id'];
-				
-				$result = $this->mDb->associateInsert( $table, $pDataHash['paypal_store'] );
+				$pDataHash['address_store']['content_id'] = $pDataHash['content_id'];
+				$pDataHash['contact_store']['address_id'] = $pDataHash['content_id'];
+			
+				$result = $this->mDb->associateInsert( $ctable, $pDataHash['contact_store'] );
+				$result = $this->mDb->associateInsert( $ptable, $pDataHash['paypal_store'] );
 				$result = $this->mDb->associateInsert( $atable, $pDataHash['address_store'] );
 
 				$this->mDb->CompleteTrans();
@@ -448,7 +453,7 @@ class Paypal extends LibertyContent {
 		$ret = FALSE;
 		$query = "DELETE FROM `".BIT_DB_PREFIX."paypal`";
 		$result = $this->mDb->query( $query );
-		$query = "DELETE FROM `".BIT_DB_PREFIX."paypal_address`";
+		$query = "DELETE FROM `".BIT_DB_PREFIX."contact_address`";
 		$result = $this->mDb->query( $query );
 		$query = "DELETE FROM `".BIT_DB_PREFIX."paypal_line_item`";
 		$result = $this->mDb->query( $query );
@@ -513,14 +518,14 @@ class Paypal extends LibertyContent {
 			(SELECT COUNT(*) FROM `".BIT_DB_PREFIX."paypal_xref` x WHERE x.content_id = ci.content_id ) AS links, 
 			(SELECT COUNT(*) FROM `".BIT_DB_PREFIX."task_ticket` e WHERE e.usn = ci.usn ) AS enquiries $selectSql 
 			FROM `".BIT_DB_PREFIX."paypal` ci 
-			LEFT JOIN `".BIT_DB_PREFIX."paypal_address` a ON a.content_id = ci.content_id $findSql
+			LEFT JOIN `".BIT_DB_PREFIX."contact_address` a ON a.content_id = ci.content_id $findSql
 			$joinSql 
 			WHERE ci.`".$type."` <> '' $whereSql ORDER BY ".$this->mDb->convertSortmode( $sort_mode );
 		$query_cant = "SELECT COUNT( * )
 			FROM `".BIT_DB_PREFIX."paypal` ci
-			LEFT JOIN `".BIT_DB_PREFIX."paypal_address` a ON a.content_id = ci.content_id $findSql
+			LEFT JOIN `".BIT_DB_PREFIX."contact_address` a ON a.content_id = ci.content_id $findSql
 			$joinSql WHERE ci.`".$type."` <> '' $whereSql ";
-//			INNER JOIN `".BIT_DB_PREFIX."paypal_address` a ON a.content_id = ci.content_id 
+//			INNER JOIN `".BIT_DB_PREFIX."contact_address` a ON a.content_id = ci.content_id 
 		$result = $this->mDb->query( $query, $bindVars, $max_records, $offset );
 		$ret = array();
 		while( $res = $result->fetchRow() ) {
@@ -544,7 +549,7 @@ class Paypal extends LibertyContent {
 		if( $this->isValid() ) {
 		$sql = "SELECT ci.*, a.*, n.*, p.*
 			FROM `".BIT_DB_PREFIX."paypal` ci 
-			LEFT JOIN `".BIT_DB_PREFIX."paypal_address` a ON a.usn = ci.usn
+			LEFT JOIN `".BIT_DB_PREFIX."contact_address` a ON a.usn = ci.usn
 			LEFT JOIN `".BIT_DB_PREFIX."nlpg_blpu` n ON n.`uprn` = ci.`nlpg`
 			LEFT JOIN `".BIT_DB_PREFIX."nlpg_lpi` p ON p.`uprn` = ci.`nlpg` AND p.`language` = 'ENG' AND p.`logical_status` = 1
 			WHERE ci.`content_id` = ?";

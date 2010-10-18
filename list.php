@@ -27,7 +27,7 @@ if( !empty( $_REQUEST["find_org"] ) ) {
 	$_REQUEST["find_name"] = '';
 	$_REQUEST["sort_mode"] = 'organisation_asc';
 } else if( empty( $_REQUEST["sort_mode"] ) ) {
-	$_REQUEST["sort_mode"] = 'surname_asc';
+	$_REQUEST["sort_mode"] = 'title_asc';
 	$_REQUEST["find_name"] = 'a,a';
 }
 
@@ -35,7 +35,7 @@ if( !empty( $_REQUEST["find_org"] ) ) {
 //$gBitSmarty->assign_by_ref('paypal_type', $paypal_type);
 $listHash = $_REQUEST;
 // Get a list of matching paypal entries
-$listpaypals = $gContent->getPaypalList( $listHash );
+$listpaypals = $gContent->getList( $listHash );
 
 $gBitSmarty->assign_by_ref( 'listpaypals', $listpaypals );
 $gBitSmarty->assign_by_ref( 'listInfo', $listHash['listInfo'] );
@@ -43,5 +43,4 @@ $gBitSmarty->assign_by_ref( 'listInfo', $listHash['listInfo'] );
 $gBitSystem->setBrowserTitle("View Paypals List");
 // Display the template
 $gBitSystem->display( 'bitpackage:paypal/list.tpl', NULL, array( 'display_mode' => 'list' ));
-
 ?>
