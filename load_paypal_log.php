@@ -28,11 +28,11 @@ if( empty( $_REQUEST["update"] ) ) {
 
 $row = 0;
 
-$handle = fopen("data/PaypalPayments08-09.csv", "r");
+$handle = fopen("data/paypal02-10a.csv", "r");
 if ( $handle == FALSE) {
 	$row = -999;
 } else {
-	while (($data = fgetcsv($handle, 800, "\t")) !== FALSE) {
+	while (($data = fgetcsv($handle, 16000, "\t")) !== FALSE) {
     	if ( $row ) {
     		$paypals->PaypalRecordLoad( $data );
     	}
