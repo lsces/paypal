@@ -15,8 +15,10 @@ $tables = array(
   post_pack F,
   post_insure F,
   vat F,
+  balance F,
   from_email_address C(100),
   to_email_address C(100),
+  email C(256),
   reference_txn_id C(32)
   invoice_no C(20)
   payment_type C(32),
