@@ -337,8 +337,9 @@ class Paypal extends LibertyContent {
 	 */
 	function PaypalBaseRecordLoad( $data ) {
 		$ctable = BIT_DB_PREFIX."contact";
+		$catable = BIT_DB_PREFIX."contact_address";
 		$ptable = BIT_DB_PREFIX."paypal";
-		$atable = BIT_DB_PREFIX."contact_address";
+		$atable = BIT_DB_PREFIX."paypal_address";
 
 		
 		$pDataHash['paypal_store']['txn_date'] = $data[0];
@@ -349,13 +350,18 @@ class Paypal extends LibertyContent {
 		$pDataHash['paypal_store']['txn_type'] = $data[4];
 		$pDataHash['paypal_store']['txn_status'] = $data[5];
 		$pDataHash['paypal_store']['currency'] = $data[6];
-		$pDataHash['paypal_store']['gross'] = $data[7];
+		$pDataHash['paypal_store']['gross'] = floatval($data[7]);
 		if ( $data[8] == '...' ) {
 			$pDataHash['paypal_store']['fee'] = 0.0;
 			$pDataHash['paypal_store']['net'] = 0.0;
 		} else {
 			$pDataHash['paypal_store']['fee'] = $data[8];
-			$pDataHash['paypal_store']['net'] = $data[9];
+			$pDataHash['paypal_store']['net'] = floatval($data[9]);
+		}
+		if ( $data[10] == 'paypal@lsces.co.uk') {
+			$pDataHash['paypal_store']['email'] = $data[11];
+		} else {
+			$pDataHash['paypal_store']['email'] = $data[10];
 		}
 		$pDataHash['paypal_store']['from_email_address'] = $data[10];
 		$pDataHash['paypal_store']['to_email_address'] = $data[11];
@@ -363,24 +369,29 @@ class Paypal extends LibertyContent {
 		$pDataHash['paypal_store']['payment_type'] = $data[13];
 		$pDataHash['paypal_store']['cparty_status'] = $data[14];
 		$pDataHash['paypal_store']['addr_status'] = $data[15];
-		$pDataHash['paypal_store']['item_title'] = $data[16];
-		$pDataHash['paypal_store']['item_id'] = $data[17];
-		$pDataHash['paypal_store']['post_pack'] = $data[18];
-		$pDataHash['paypal_store']['post_insure'] = $data[19];
-		$pDataHash['paypal_store']['vat'] = $data[20];
+		$pDataHash['paypal_store']['item_title'] = substr($data[16], 0, 200 );
+		$pDataHash['paypal_store']['item_id'] = substr($data[17], 0, 10 );
+		$pDataHash['paypal_store']['memo'] = $data[16].'##'.$data[17];
+		$pDataHash['paypal_store']['post_pack'] = substr($data[18], 0, 10 );
+		$pDataHash['paypal_store']['post_insure'] = substr($data[19], 0, 10 );
+		$pDataHash['paypal_store']['vat'] = substr($data[20], 0, 10 );
 		$pDataHash['paypal_store']['reference_txn_id'] = $data[25];
 		$pDataHash['paypal_store']['cust_no'] = $data[26];
 		$pDataHash['paypal_store']['vat'] = $data[27];
-		$pDataHash['address_store']['organisation'] = $data[3];
-		$pDataHash['address_store']['sao'] = substr($data[30], 0, 10 );
-		$pDataHash['address_store']['street'] = $data[30];
-		$pDataHash['address_store']['locality'] = $data[31];
-		$pDataHash['address_store']['town'] = $data[32];
-		$pDataHash['address_store']['county'] = $data[33];
-		$pDataHash['address_store']['postcode'] = $data[34];
-		$pDataHash['address_store']['country'] = $data[35];
-		$pDataHash['paypal_store']['phone'] = $data[36];
-
+		$pDataHash['paypal_store']['balance'] = floatval($data[30]);
+		if ( $data[35] != 'wr12 7ep') {
+			$pDataHash['address_store']['sao'] = substr($data[31], 0, 10 );
+			$pDataHash['address_store']['street'] = $data[31];
+			$pDataHash['address_store']['locality'] = $data[32];
+			$pDataHash['address_store']['town'] = $data[33];
+			$pDataHash['address_store']['county'] = $data[34];
+			$pDataHash['address_store']['postcode'] = $data[35];
+			$pDataHash['address_store']['country'] = $data[36];
+		} else {
+			$pDataHash['address_store']['postcode'] = '';
+			$pDataHash['address_store']['sao'] = '';
+		}
+		$pDataHash['paypal_store']['phone'] = $data[37];
 		$query_cant = "SELECT COUNT(pp.`txn_id`) FROM `".BIT_DB_PREFIX."paypal` pp
 				WHERE pp.`txn_id`=?";
 		$cant = $this->mDb->getOne( $query_cant, Array( $data[12] ) );
@@ -394,23 +405,37 @@ class Paypal extends LibertyContent {
 // TODO - Handle duplicate transaction ID from paypal 
 		} else {
 			$this->mDb->StartTrans();
-			$this->mContentId = 0;
 			$pDataHash['content_id'] = 0;
-			if ( LibertyContent::store( $pDataHash ) ) {
-				$pDataHash['contact_store']['content_id'] = $pDataHash['content_id'];
-				$pDataHash['paypal_store']['content_id'] = $pDataHash['content_id'];
-				$pDataHash['address_store']['content_id'] = $pDataHash['content_id'];
-				$pDataHash['contact_store']['address_id'] = $pDataHash['content_id'];
-			
-				$result = $this->mDb->associateInsert( $ctable, $pDataHash['contact_store'] );
-				$result = $this->mDb->associateInsert( $ptable, $pDataHash['paypal_store'] );
-				$result = $this->mDb->associateInsert( $atable, $pDataHash['address_store'] );
+			if ( !empty( $pDataHash['paypal_store']['email']) ) {
+				$query_ci = "SELECT c.`content_id` FROM `".BIT_DB_PREFIX."contact` c
+					WHERE c.`xkey`=?";
+				$result = $this->mDb->getRow( $query_ci, Array( $data[3] ) );
+				if ( $result ) {
+					$this->mContentId = $result['content_id'];
+					$pDataHash['content_id'] = $result['content_id'];
+					$pDataHash['address_store']['content_id'] = $pDataHash['content_id'];
+					$result = $this->mDb->associateInsert( $atable, $pDataHash['address_store'] );
+				} else {
+					$this->mContentId = 0;
+					$pDataHash['title'] = $data[3];
+					if ( LibertyContent::store( $pDataHash ) ) {
+						$pDataHash['contact_store']['content_id'] = $pDataHash['content_id'];
+						$pDataHash['address_store']['content_id'] = $pDataHash['content_id'];
+						$pDataHash['contact_store']['address_id'] = $pDataHash['content_id'];
+					
+						$result = $this->mDb->associateInsert( $ctable, $pDataHash['contact_store'] );
+						$result = $this->mDb->associateInsert( $catable, $pData['address_store'] );
+					}
+				}
+			}
+			$pDataHash['paypal_store']['content_id'] = $pDataHash['content_id'];
+			$result = $this->mDb->associateInsert( $ptable, $pDataHash['paypal_store'] );
 
-				$this->mDb->CompleteTrans();
-			} else {
-				$this->mDb->RollbackTrans();
-				$this->mErrors['store'] = 'Failed to store this paypal.';
-			}				
+			$this->mDb->CompleteTrans();
+//			} else {
+//				$this->mDb->RollbackTrans();
+//				$this->mErrors['store'] = 'Failed to store this paypal.';
+//			}				
 		}
 		return( count( $this->mErrors ) == 0 ); 
 	}
@@ -422,6 +447,7 @@ class Paypal extends LibertyContent {
 	function PaypalItemRecordLoad( $data ) {
 		$table = BIT_DB_PREFIX."paypal_line_item";
 		
+		$pDataHash['data_store']['paypal_txn_id'] = $this->mContentId;
 		$pDataHash['data_store']['txn_id'] = $data[12];
 		$pDataHash['data_store']['item_title'] = $data[16];
 		$pDataHash['data_store']['item_id'] = $data[17];
@@ -453,7 +479,7 @@ class Paypal extends LibertyContent {
 		$ret = FALSE;
 		$query = "DELETE FROM `".BIT_DB_PREFIX."paypal`";
 		$result = $this->mDb->query( $query );
-		$query = "DELETE FROM `".BIT_DB_PREFIX."contact_address`";
+		$query = "DELETE FROM `".BIT_DB_PREFIX."paypal_address`";
 		$result = $this->mDb->query( $query );
 		$query = "DELETE FROM `".BIT_DB_PREFIX."paypal_line_item`";
 		$result = $this->mDb->query( $query );
